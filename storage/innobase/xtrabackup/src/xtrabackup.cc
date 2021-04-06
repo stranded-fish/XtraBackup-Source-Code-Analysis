@@ -8412,6 +8412,7 @@ handle_options(int argc, char **argv, char ***argv_client, char ***argv_server)
 		exit(EXIT_FAILURE);
 	}
 
+	// 判断调用程序名是否为 innobackupex，若是则模拟执行 innobackupex 脚本
 	if (strcmp(base_name(my_progname), INNOBACKUPEX_BIN_NAME) == 0 &&
 	    argc_client > 0) {
 		/* emulate innobackupex script */
@@ -8454,8 +8455,18 @@ handle_options(int argc, char **argv, char ***argv_client, char ***argv_server)
 
 /* ================= main =================== */
 
+/*
+	xtrabackup \ innobackupex 命令入口。
+	
+	注：自版本 2.3 起，innobackupex 功能全部合并到了 xtrabackup 中，为了兼容之前版本，
+	最终工具集仍保留了名为 innobackupex 的可执行文件，但该文件实际为指向 xtrabackup 
+	可执行文件的软链接。file innobackupex > innobackupex: symbolic link to `xtrabackup'
+	故 xtrabackup \ innobackupex 命令入口均为该 main 方法。
+*/
+
 int main(int argc, char **argv)
 {
+	/* ================= init =================== */
 	char **client_defaults, **server_defaults;
 	char cwd[FN_REFLEN];
 
@@ -8485,8 +8496,12 @@ int main(int argc, char **argv)
 	system_charset_info= &my_charset_utf8_general_ci;
 	key_map_full.set_all();
 
+	/* ============ handle options ============== */
+
+	// 处理参数
 	handle_options(argc, argv, &client_defaults, &server_defaults);
 
+	// 判断是否为 innobackupex 模式，若是则调动对应初始化方法
 	if (innobackupex_mode) {
 		if (!ibx_init()) {
 			exit(EXIT_FAILURE);
@@ -8691,6 +8706,8 @@ int main(int argc, char **argv)
 	}
 #endif
 
+	/* ============== exec task ================= */
+
 	/* --backup */
 	if (xtrabackup_backup)
 		xtrabackup_backup_func();
@@ -8703,6 +8720,7 @@ int main(int argc, char **argv)
 	if (xtrabackup_prepare)
 		xtrabackup_prepare_func();
 
+	/* --copy-back || --move-back */
 	if (xtrabackup_copy_back || xtrabackup_move_back) {
 		if (!check_if_param_set("datadir")) {
 			msg("Error: datadir must be specified.\n");
@@ -8712,9 +8730,12 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 	}
 
+	/* --decrypt || --decompress */
 	if (xtrabackup_decrypt_decompress && !decrypt_decompress()) {
 		exit(EXIT_FAILURE);
 	}
+
+	/* ================ clean =================== */
 
 	backup_cleanup();
 
