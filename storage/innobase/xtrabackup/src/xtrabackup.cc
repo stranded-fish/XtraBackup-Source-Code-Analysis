@@ -8456,11 +8456,6 @@ handle_options(int argc, char **argv, char ***argv_client, char ***argv_server)
 
 int main(int argc, char **argv)
 {
-	msg("hello world!!!\n");
-	msg("hello world!!!\n");
-	msg("hello world!!!\n");
-	msg("hello world!!!\n");
-	msg("hello world!!!\n");
 	char **client_defaults, **server_defaults;
 	char cwd[FN_REFLEN];
 
