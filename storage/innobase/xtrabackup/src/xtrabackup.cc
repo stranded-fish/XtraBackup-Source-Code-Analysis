@@ -2709,9 +2709,13 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 
 	action = xb_get_copy_action();
 
+	// TODO 压缩 compressing 、流化 streaming 输出
+	// 210406 19:32:30 [01] Compressing and streaming ./mysql/time_zone_transition.ibd
+	// 猜想？这个时候已经是压缩完了，这个地方只是 streaming 步骤？
 	if (xtrabackup_stream) {
 		msg_ts("[%02u] %s %s\n", thread_n, action, node_path);
 	} else {
+		// 这个地方是 compressing and sreaming 非 innodb 表的时候
 		msg_ts("[%02u] %s %s to %s\n", thread_n, action,
 		       node_path, dstfile->path);
 	}
@@ -4710,6 +4714,7 @@ reread_log_header:
 
 	mutex_exit(&log_sys->mutex);
 
+	// 初始化相应的 datasink （若指定了 --compress 参数，则会调用相关压缩方法）
 	xtrabackup_init_datasinks();
 
 	if (!select_history()) {
@@ -4757,6 +4762,8 @@ reread_log_header:
 	mutex_enter(&log_sys->mutex);
 	xtrabackup_choose_lsn_offset(checkpoint_lsn_start);
 	mutex_exit(&log_sys->mutex);
+
+	// TODO 复制 redo 日志线程
 
 	/* copy log file by current position */
 	if(xtrabackup_copy_logfile(checkpoint_lsn_start, FALSE))
@@ -4812,6 +4819,8 @@ reread_log_header:
 	}
 
 	/* Create data copying threads */
+
+	// TODO 到这才是输出 compressing and streaming 的地方
 	data_threads = (data_thread_ctxt_t *)
 		ut_malloc_nokey(sizeof(data_thread_ctxt_t) *
                                 xtrabackup_parallel);
@@ -8498,7 +8507,7 @@ int main(int argc, char **argv)
 
 	/* ============ handle options ============== */
 
-	// 处理参数
+	// 处理执行命令及参数
 	handle_options(argc, argv, &client_defaults, &server_defaults);
 
 	// 判断是否为 innobackupex 模式，若是则调动对应初始化方法
