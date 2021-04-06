@@ -1,0 +1,2 @@
+/usr/bin/ar cr libfederated.a  CMakeFiles/federated.dir/ha_federated.cc.o
+/usr/bin/ranlib libfederated.a

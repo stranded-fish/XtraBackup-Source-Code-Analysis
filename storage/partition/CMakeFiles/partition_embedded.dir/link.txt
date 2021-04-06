@@ -1,0 +1,2 @@
+/usr/bin/ar cr libpartition_embedded.a  CMakeFiles/partition_embedded.dir/ha_partition.cc.o
+/usr/bin/ranlib libpartition_embedded.a

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libfederated_embedded.a  CMakeFiles/federated_embedded.dir/ha_federated.cc.o
+/usr/bin/ranlib libfederated_embedded.a

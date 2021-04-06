@@ -1,0 +1,2 @@
+/usr/bin/ar cr libjsmn.a  CMakeFiles/jsmn.dir/jsmn.c.o
+/usr/bin/ranlib libjsmn.a

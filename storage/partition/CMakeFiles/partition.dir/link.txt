@@ -1,0 +1,2 @@
+/usr/bin/ar cr libpartition.a  CMakeFiles/partition.dir/ha_partition.cc.o
+/usr/bin/ranlib libpartition.a

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libblackhole_embedded.a  CMakeFiles/blackhole_embedded.dir/ha_blackhole.cc.o
+/usr/bin/ranlib libblackhole_embedded.a

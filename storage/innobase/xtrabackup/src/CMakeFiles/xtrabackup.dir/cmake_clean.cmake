@@ -1,0 +1,40 @@
+FILE(REMOVE_RECURSE
+  "CMakeFiles/xtrabackup.dir/xtrabackup.cc.o"
+  "CMakeFiles/xtrabackup.dir/innobackupex.cc.o"
+  "CMakeFiles/xtrabackup.dir/changed_page_bitmap.cc.o"
+  "CMakeFiles/xtrabackup.dir/compact.cc.o"
+  "CMakeFiles/xtrabackup.dir/datasink.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_archive.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_buffer.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_compress.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_encrypt.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_decrypt.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_local.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_stdout.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_tmpfile.c.o"
+  "CMakeFiles/xtrabackup.dir/ds_xbstream.c.o"
+  "CMakeFiles/xtrabackup.dir/fil_cur.cc.o"
+  "CMakeFiles/xtrabackup.dir/quicklz/quicklz.c.o"
+  "CMakeFiles/xtrabackup.dir/read_filt.cc.o"
+  "CMakeFiles/xtrabackup.dir/write_filt.cc.o"
+  "CMakeFiles/xtrabackup.dir/wsrep.cc.o"
+  "CMakeFiles/xtrabackup.dir/xbcrypt_common.c.o"
+  "CMakeFiles/xtrabackup.dir/xbcrypt_write.c.o"
+  "CMakeFiles/xtrabackup.dir/xbstream_write.c.o"
+  "CMakeFiles/xtrabackup.dir/backup_mysql.cc.o"
+  "CMakeFiles/xtrabackup.dir/backup_copy.cc.o"
+  "CMakeFiles/xtrabackup.dir/keyring.cc.o"
+  "CMakeFiles/xtrabackup.dir/__/__/__/__/plugin/keyring/keyring_impl.cc.o"
+  "CMakeFiles/xtrabackup.dir/__/__/__/__/plugin/keyring/keyring_key.cc.o"
+  "CMakeFiles/xtrabackup.dir/__/__/__/__/plugin/keyring/buffered_file_io.cc.o"
+  "CMakeFiles/xtrabackup.dir/__/__/__/__/plugin/keyring/keys_container.cc.o"
+  "CMakeFiles/xtrabackup.dir/__/__/__/__/sql-common/client_authentication.cc.o"
+  "CMakeFiles/xtrabackup.dir/__/__/__/__/sql/des_key_file.cc.o"
+  "xtrabackup.pdb"
+  "xtrabackup"
+)
+
+# Per-language clean rules from dependency scanning.
+FOREACH(lang C CXX)
+  INCLUDE(CMakeFiles/xtrabackup.dir/cmake_clean_${lang}.cmake OPTIONAL)
+ENDFOREACH(lang)
