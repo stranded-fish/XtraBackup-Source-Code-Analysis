@@ -2686,12 +2686,16 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 	} else if (xtrabackup_compact) {
 		write_filter = &wf_compact;
 	} else {
+		// innobackupex 将执行这一步
+		// 参数设置过程中，只有 xtrabackup 设置为 TRUE，其他参数默认为 FALSE
 		write_filter = &wf_write_through;
 	}
 
 	memset(&write_filt_ctxt, 0, sizeof(xb_write_filt_ctxt_t));
 	ut_a(write_filter->process != NULL);
 
+	// 执行 compress_init : ds_compress.c 方法，此时创建压缩线程
+	// 但压缩线程创建后，将进入 while 死循环，直到后面条用 compress_write 方法解锁
 	if (write_filter->init != NULL &&
 	    !write_filter->init(&write_filt_ctxt, dst_name, &cursor)) {
 		msg("[%02u] xtrabackup: error: "
@@ -2709,19 +2713,16 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 
 	action = xb_get_copy_action();
 
-	// TODO 压缩 compressing 、流化 streaming 输出
-	// 210406 19:32:30 [01] Compressing and streaming ./mysql/time_zone_transition.ibd
-	// 猜想？这个时候已经是压缩完了，这个地方只是 streaming 步骤？
 	if (xtrabackup_stream) {
 		msg_ts("[%02u] %s %s\n", thread_n, action, node_path);
 	} else {
-		// 这个地方是 compressing and sreaming 非 innodb 表的时候
 		msg_ts("[%02u] %s %s to %s\n", thread_n, action,
 		       node_path, dstfile->path);
 	}
 
 	/* The main copy loop */
 	while ((res = xb_fil_cur_read(&cursor)) == XB_FIL_CUR_SUCCESS) {
+		// 执行 compress_write : ds_compress.c 方法，解锁压缩线程，开始执行压缩任务
 		if (!write_filter->process(&write_filt_ctxt, dstfile)) {
 			goto error;
 		}
@@ -3267,9 +3268,10 @@ data_copy_thread_func(
 		}
 	}
 
-	mutex_enter(ctxt->count_mutex);
-	(*ctxt->count)--;
-	mutex_exit(ctxt->count_mutex);
+	// 线程任务完成，尝试修改 count 计数
+	mutex_enter(ctxt->count_mutex); // 尝试获取锁，若已被占用，则等待
+	(*ctxt->count)--;               // count 计数 - 1（当 count 为 0 时，表示所有线程任务完成，父线程停止循环等待）
+	mutex_exit(ctxt->count_mutex);  // 释放锁
 
 	my_thread_end();
 	os_thread_exit();
@@ -4714,7 +4716,7 @@ reread_log_header:
 
 	mutex_exit(&log_sys->mutex);
 
-	// 初始化相应的 datasink （若指定了 --compress 参数，则会调用相关压缩方法）
+	// 初始化相应的 datasink
 	xtrabackup_init_datasinks();
 
 	if (!select_history()) {
@@ -4755,6 +4757,7 @@ reread_log_header:
 		io_ticket = xtrabackup_throttle;
 		wait_throttle = os_event_create("wait_throttle");
 
+		// 线程 1 
 		os_thread_create(io_watching_thread, NULL,
 				 &io_watching_thread_id);
 	}
@@ -4771,6 +4774,8 @@ reread_log_header:
 
 
 	log_copying_stop = os_event_create("log_copying_stop");
+
+	// 线程 2 启动日志复制 单线程
 	os_thread_create(log_copying_thread, NULL, &log_copying_thread_id);
 
 	/* Populate fil_system with tablespaces to copy */
@@ -4821,32 +4826,50 @@ reread_log_header:
 	/* Create data copying threads */
 
 	// TODO 到这才是输出 compressing and streaming 的地方
+	// 好像确实这一块执行的 compressing 和 streaming
+
+	// 根据并行线程数，分配线程执行所需内存
 	data_threads = (data_thread_ctxt_t *)
 		ut_malloc_nokey(sizeof(data_thread_ctxt_t) *
                                 xtrabackup_parallel);
 	count = xtrabackup_parallel;
+
+	// 创建互斥锁
 	mutex_create(LATCH_ID_XTRA_COUNT_MUTEX, &count_mutex);
 
+	// 创建并行数据复制线程
 	for (i = 0; i < (uint) xtrabackup_parallel; i++) {
-		data_threads[i].it = it;
-		data_threads[i].num = i+1;
-		data_threads[i].count = &count;
-		data_threads[i].count_mutex = &count_mutex;
+		data_threads[i].it = it; 	                // 设置文件迭代器
+		data_threads[i].num = i+1; 	                // 设置线程序号
+		data_threads[i].count = &count;             // 设置线程数
+		data_threads[i].count_mutex = &count_mutex; // 设置互斥锁
+
+		// 线程 3 数据复制线程
 		os_thread_create(data_copy_thread_func, data_threads + i,
 				 &data_threads[i].id);
+				 
 	}
 
 	/* Wait for threads to exit */
 	while (1) {
 		os_thread_sleep(1000000);
+
+		// 尝试获取锁，若已被占用，则等待
 		mutex_enter(&count_mutex);
+
+		// 当 count 为 0 时，表示所有线程 data_copy_thread_func 执行完毕，此时可退出循环
 		if (count == 0) {
+
+			// 释放锁，同时唤醒所有等待的线程，拿到锁的线程开始执行，其余线程继续等待
 			mutex_exit(&count_mutex);
 			break;
 		}
+
+		// 释放锁......
 		mutex_exit(&count_mutex);
 	}
 
+	// 释放锁
 	mutex_free(&count_mutex);
 	ut_free(data_threads);
 	datafiles_iter_free(it);
@@ -4856,6 +4879,7 @@ reread_log_header:
 	}
 	}
 
+	// 开始备份非 InnoDB 表 和 文件
 	if (!backup_start()) {
 		exit(EXIT_FAILURE);
 	}

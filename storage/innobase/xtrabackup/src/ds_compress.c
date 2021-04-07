@@ -93,6 +93,9 @@ compress_init(const char *root)
 	comp_thread_ctxt_t	*threads;
 
 	/* Create and initialize the worker threads */
+
+	// 线程创建完毕后，会进入 while 死循环，直到 compress_write 方法被调用
+	// compress_write 方法将设置 worker threads 运行必要参数，并解锁线程（设置 thd->data_avail = TRUE;）
 	threads = create_worker_threads(xtrabackup_compress_threads);
 	if (threads == NULL) {
 		msg("compress: failed to create worker threads.\n");
@@ -195,6 +198,7 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 	comp_ctxt = comp_file->comp_ctxt;
 	dest_file = comp_file->dest_file;
 
+	// 获取执行压缩任务的线程
 	threads = comp_ctxt->threads;
 	nthreads = comp_ctxt->nthreads;
 
@@ -216,7 +220,10 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 			thd->from_len = chunk_len;
 
 			pthread_mutex_lock(&thd->data_mutex);
+			
+			// 解锁线程，准备执行 qlz_compress 压缩
 			thd->data_avail = TRUE;
+
 			pthread_cond_signal(&thd->data_cond);
 			pthread_mutex_unlock(&thd->data_mutex);
 
@@ -234,6 +241,8 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 			thd = threads + i;
 
 			pthread_mutex_lock(&thd->data_mutex);
+
+			// 等待线程完成压缩
 			while (thd->data_avail == TRUE) {
 				pthread_cond_wait(&thd->data_cond,
 						  &thd->data_mutex);
@@ -241,6 +250,8 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 
 			xb_a(threads[i].to_len > 0);
 
+			// TODO 这个地方应该只是将 compressed data 写入到 buffer 中调用 buffer_write : ds_buffer 方法
+			// 还不确定
 			if (ds_write(dest_file, "NEWBNEWB", 8) ||
 			    write_uint64_le(dest_file,
 					    comp_file->bytes_processed)) {
@@ -437,6 +448,7 @@ compress_worker_thread_func(void *arg)
 		thd->data_avail = FALSE;
 		pthread_cond_signal(&thd->data_cond);
 
+		// 等待执行 compress_write 方法，将 thd->data_avail 设置为 TRUE 解锁
 		while (!thd->data_avail && !thd->cancelled) {
 			pthread_cond_wait(&thd->data_cond, &thd->data_mutex);
 		}
