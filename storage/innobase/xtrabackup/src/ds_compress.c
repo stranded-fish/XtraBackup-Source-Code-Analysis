@@ -250,8 +250,7 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 
 			xb_a(threads[i].to_len > 0);
 
-			// TODO 这个地方应该只是将 compressed data 写入到 buffer 中调用 buffer_write : ds_buffer 方法
-			// 还不确定
+			// 将 compressed data 写入到 buffer 中（调用 buffer_write : ds_buffer 方法）
 			if (ds_write(dest_file, "NEWBNEWB", 8) ||
 			    write_uint64_le(dest_file,
 					    comp_file->bytes_processed)) {

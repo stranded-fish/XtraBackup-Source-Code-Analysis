@@ -4766,8 +4766,6 @@ reread_log_header:
 	xtrabackup_choose_lsn_offset(checkpoint_lsn_start);
 	mutex_exit(&log_sys->mutex);
 
-	// TODO 复制 redo 日志线程
-
 	/* copy log file by current position */
 	if(xtrabackup_copy_logfile(checkpoint_lsn_start, FALSE))
 		exit(EXIT_FAILURE);
@@ -4824,9 +4822,6 @@ reread_log_header:
 	}
 
 	/* Create data copying threads */
-
-	// TODO 到这才是输出 compressing and streaming 的地方
-	// 好像确实这一块执行的 compressing 和 streaming
 
 	// 根据并行线程数，分配线程执行所需内存
 	data_threads = (data_thread_ctxt_t *)
