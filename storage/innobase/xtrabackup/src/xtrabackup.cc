@@ -4874,6 +4874,7 @@ reread_log_header:
 	}
 	}
 
+	// 数据库加锁
 	// 开始备份非 InnoDB 表 和 文件
 	if (!backup_start()) {
 		exit(EXIT_FAILURE);
@@ -4939,6 +4940,8 @@ skip_last_cp:
 		exit(EXIT_FAILURE);
 	}
 
+	// 数据库解锁
+	// 释放由 FTWRL 获取的全局读锁和 binlog 锁
 	if (!backup_finish()) {
 		exit(EXIT_FAILURE);
 	}
