@@ -2687,7 +2687,7 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 	} else if (xtrabackup_compact) {
 		write_filter = &wf_compact;
 	} else {
-		// innobackupex 将执行这一步
+		// innobackupex --compress 将执行这一步
 		// 参数设置过程中，只有 xtrabackup 设置为 TRUE，其他参数默认为 FALSE
 		write_filter = &wf_write_through;
 	}
