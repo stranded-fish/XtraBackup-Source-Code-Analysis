@@ -2652,6 +2652,7 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 
 	is_system = !fil_is_user_tablespace_id(node->space->id);
 
+	// 加 MDL 锁，保证数据一致性（禁止在此期间对元数据进行写入操作）
 	if (!is_system && opt_lock_ddl_per_table) {
 		mdl_lock_table(node->space->id);
 	}
@@ -2694,8 +2695,6 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 	memset(&write_filt_ctxt, 0, sizeof(xb_write_filt_ctxt_t));
 	ut_a(write_filter->process != NULL);
 
-	// 执行 compress_init : ds_compress.c 方法，此时创建压缩线程
-	// 但压缩线程创建后，将进入 while 死循环，直到后面条用 compress_write 方法解锁
 	if (write_filter->init != NULL &&
 	    !write_filter->init(&write_filt_ctxt, dst_name, &cursor)) {
 		msg("[%02u] xtrabackup: error: "
