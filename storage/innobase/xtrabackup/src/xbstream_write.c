@@ -134,6 +134,11 @@ xb_stream_write_data(xb_wstream_file_t *file, const void *buf, size_t len)
 int
 xb_stream_write_close(xb_wstream_file_t *file)
 {
+	/* 此处将 buffer 中的数据分两次输出到 SDTOUT （即控制台）
+	 首先由 xb_stream_flush() 方法输出主要内容，
+	 再由 xb_stream_write_eof() 方法输出 eof 文件终止符，
+	 输出到控制台后，再由 > 重定向符将数据导入到指定的 xbstream 文件
+	 最终实现落盘 */
 	if (xb_stream_flush(file) ||
 	    xb_stream_write_eof(file)) {
 		my_free(file);
