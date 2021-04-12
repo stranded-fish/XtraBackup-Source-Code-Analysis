@@ -31,25 +31,38 @@ extern "C" {
 struct datasink_struct;
 typedef struct datasink_struct datasink_t;
 
+/* 数据池环境 (ds_create)
+
+ptr 用于指向该数据池具体执行环境，如 compress_ds_data->ptr 指向 ds_compress_ctxt_t，
+而 ds_compress_ctxt_t 包含执行具体压缩任务的线程变量。
+
+pipe_ctxt 指向下一数据池，如 compress_ds_data->pipe_ctxt 指向 buffer_ds。
+*/
 typedef struct ds_ctxt {
-	datasink_t	*datasink;
-	char 		*root;
-	void		*ptr;
-	struct ds_ctxt	*pipe_ctxt;
+	datasink_t	*datasink; 	    // 数据池类型，决定数据池执行的方法
+	char 		*root;          // 数据池根地址
+	void		*ptr;           // 数据池执行环境
+	struct ds_ctxt	*pipe_ctxt; // 数据池管道，即当前数据池的输出目的地
 } ds_ctxt_t;
 
+/* 数据池文件环境 (ds_open)
+
+ptr 用于指向具体文件类型，如 ds_compress_file_t
+
+*/
 typedef struct {
-	void		*ptr;
-	char		*path;
-	datasink_t	*datasink;
+	void		*ptr;           // 执行文件
+	char		*path;          // 输出路径
+	datasink_t	*datasink;      // 数据池类型，决定数据池执行的方法
 } ds_file_t;
 
+// 数据池类型
 struct datasink_struct {
-	ds_ctxt_t *(*init)(const char *root);
-	ds_file_t *(*open)(ds_ctxt_t *ctxt, const char *path, MY_STAT *stat);
-	int (*write)(ds_file_t *file, const void *buf, size_t len);
-	int (*close)(ds_file_t *file);
-	void (*deinit)(ds_ctxt_t *ctxt);
+	ds_ctxt_t *(*init)(const char *root); 			                       // 初始化数据池
+	ds_file_t *(*open)(ds_ctxt_t *ctxt, const char *path, MY_STAT *stat);  // 打开数据池文件
+	int (*write)(ds_file_t *file, const void *buf, size_t len);            // 向数据池写入数据
+	int (*close)(ds_file_t *file); 										   // 关闭数据池，并将缓存中的数据输出到管道
+	void (*deinit)(ds_ctxt_t *ctxt);                                       // 清理数据池
 };
 
 /* Supported datasink types */

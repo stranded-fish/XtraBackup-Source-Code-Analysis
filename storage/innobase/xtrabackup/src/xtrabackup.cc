@@ -2653,6 +2653,7 @@ xtrabackup_copy_datafile(fil_node_t* node, uint thread_n)
 	is_system = !fil_is_user_tablespace_id(node->space->id);
 
 	// 加 MDL 锁，保证数据一致性（禁止在此期间对元数据进行写入操作）
+	// 由输入参数 --lock-ddl-per-table 设置，默认为 FALSE 不加锁
 	if (!is_system && opt_lock_ddl_per_table) {
 		mdl_lock_table(node->space->id);
 	}
