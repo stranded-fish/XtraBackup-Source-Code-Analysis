@@ -324,22 +324,6 @@ archive_private.h
 archive_entry_private.h
 /root/percona-xtrabackup-release-2.4.8/storage/innobase/xtrabackup/src/libarchive/libarchive/archive_entry_private.h
 
-/root/percona-xtrabackup-release-2.4.8/storage/innobase/xtrabackup/src/libarchive/libarchive/archive_getdate.c
-sys/cdefs.h
--
-ctype.h
--
-stdio.h
--
-stdlib.h
--
-string.h
--
-time.h
--
-archive_getdate.h
-/root/percona-xtrabackup-release-2.4.8/storage/innobase/xtrabackup/src/libarchive/libarchive/archive_getdate.h
-
 /root/percona-xtrabackup-release-2.4.8/storage/innobase/xtrabackup/src/libarchive/libarchive/archive_getdate.h
 time.h
 -
