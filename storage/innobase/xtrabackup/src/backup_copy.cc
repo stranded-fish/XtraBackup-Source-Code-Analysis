@@ -1901,8 +1901,10 @@ decrypt_decompress_file(const char *filepath, uint thread_n)
 	char *dest_filepath = strdup(filepath);
 	bool needs_action = false;
 
+	// Step 1. cat 命令读取 filepath 文件，并输出到 STDOUT（标准输出）
 	cmd << "cat " << filepath;
 
+	// 判断是否为以 .xbcrypt 结尾的加密文件，若是则执行解密过程
  	if (ends_with(filepath, ".xbcrypt") && opt_decrypt) {
  		cmd << " | xbcrypt --decrypt --encrypt-algo="
  		    << xtrabackup_encrypt_algo_names[opt_decrypt_algo];
@@ -1917,10 +1919,17 @@ decrypt_decompress_file(const char *filepath, uint thread_n)
  		needs_action = true;
  	}
 
+	// 判断是否为以 .qp 结尾的压缩文件，若是则执行解压过程
  	if (opt_decompress
  	    && (ends_with(filepath, ".qp")
 		|| (ends_with(filepath, ".qp.xbcrypt")
 		    && opt_decrypt))) {
+		/* Step 2. 通过 | 重定向符将 cat 命令读取内容以标准输入方式传递给 qpress 程序，进行解压
+		参数说明：
+			-d 解压
+			-i 从 STDIN（标准输入）中读取
+			-o 输出到 STDOUT（标准输出） 
+		*/
  		cmd << " | qpress -dio ";
  		dest_filepath[strlen(dest_filepath) - 3] = 0;
  		if (needs_action) {
@@ -1930,6 +1939,8 @@ decrypt_decompress_file(const char *filepath, uint thread_n)
  		needs_action = true;
  	}
 
+	// Step 3. 通过 > 输出重定向符，将解压后的内容输出到 dest_filepath
+	// 最终命令为：cat filepath | qpress -dio > dest_filepath
  	cmd << " > " << dest_filepath;
  	message << " " << filepath;
 
