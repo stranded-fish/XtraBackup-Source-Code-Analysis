@@ -18,6 +18,19 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 *******************************************************/
 
+/*
+An archive file consists of "D" and "U" characters which instruct the decompressor to traverse up and down in
+directories to create a directory three. The "F" character instructs it to create a file:
+ARCHIVE =        ARCHIVEHEADER + (1 or more of UPDIR | DOWNDIR | FILE)
+ARCHIVEHEADER =  "qpress10" + (ui64)(chunk size of decompressed packets)
+DOWNDIR =        "D" + (ui32)(size of directory name) + (directory name) + (char)0
+UPDIR =          "U"
+FILE =           FILEHEADER + (0 or more of DATABLOCK) + FILETRAILER
+FILEHEADER =     "F" + (ui32)(size of file name) + (file name) + (char)0
+DATABLOCK =      "NEWBNEWB" + (ui64)(recovery information) + (ui32)(adler32 of compressed block) + (compressed packet)
+FILETRAILER =    "ENDSENDS" + (ui64)(recovery information)
+*/
+
 #include <mysql_version.h>
 #include <my_base.h>
 #include <quicklz.h>
@@ -250,7 +263,8 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 
 			xb_a(threads[i].to_len > 0);
 
-			// 将 compressed data 写入到 buffer 中（调用 buffer_write : ds_buffer 方法）
+			// 写 DATABLOCK 
+			// DATABLOCK = "NEWBNEWB" + (ui64)(recovery information) + (ui32)(adler32 of compressed block) + (compressed packet)
 			if (ds_write(dest_file, "NEWBNEWB", 8) ||
 			    write_uint64_le(dest_file,
 					    comp_file->bytes_processed)) {
