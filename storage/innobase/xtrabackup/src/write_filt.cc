@@ -212,6 +212,12 @@ wf_wt_process(xb_write_filt_ctxt_t *ctxt, ds_file_t *dstfile)
 {
 	xb_fil_cur_t			*cursor = ctxt->cursor;
 
+	/* TODO 
+	 这等价于 ZSTD_compressStream2 传递信息
+	 &input
+	 cursor->buf 待压缩文件首地址 input.buffin
+	 cursor->buf_read 待压缩文件字节数 input.read
+	*/
 	if (ds_write(dstfile, cursor->buf, cursor->buf_read)) {
 		return(FALSE);
 	}
