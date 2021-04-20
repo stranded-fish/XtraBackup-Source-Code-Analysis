@@ -225,6 +225,7 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 
 			thd = threads + i;
 
+			// 阻塞调用
 			pthread_mutex_lock(&thd->ctrl_mutex);
 
 			chunk_len = (len > COMPRESS_CHUNK_SIZE) ?
