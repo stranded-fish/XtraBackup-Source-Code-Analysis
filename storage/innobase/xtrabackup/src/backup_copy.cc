@@ -1928,8 +1928,7 @@ decrypt_decompress_file(const char *filepath, uint thread_n)
 		参数说明：
 			-d 解压
 			-i 从 STDIN（标准输入）中读取
-			-o 输出到 STDOUT（标准输出） 
-		*/
+			-o 输出到 STDOUT（标准输出）*/
  		cmd << " | qpress -dio ";
 
 		// 去掉 .qp 后缀
@@ -1941,8 +1940,8 @@ decrypt_decompress_file(const char *filepath, uint thread_n)
  		needs_action = true;
  	}
 
-	// Step 3. 通过 > 输出重定向符，将解压后的内容输出到当前目录（即 .qp 文件原目录）
-	// 最终命令为：cat filepath | qpress -dio > dest_filepath
+	/* Step 3. 通过 > 输出重定向符，将解压后的内容输出到当前目录（即 .qp 文件原目录）
+	最终等价于：cat filepath | qpress -dio > dest_filepath */
  	cmd << " > " << dest_filepath;
  	message << " " << filepath;
 
