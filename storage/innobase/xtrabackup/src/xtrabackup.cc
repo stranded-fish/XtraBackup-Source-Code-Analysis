@@ -3258,6 +3258,8 @@ data_copy_thread_func(
 
 	debug_sync_point("data_copy_thread_func");
 
+	/* 通过 datafile 迭代器获取文件指针
+	多个 data_copy_threads 共用一个迭代器，通过互斥锁确保获取到不同文件指针 */
 	while ((node = datafiles_iter_next(ctxt->it)) != NULL) {
 
 		/* copy the datafile */
@@ -4823,7 +4825,8 @@ reread_log_header:
 
 	/* Create data copying threads */
 
-	// 根据并行线程数，分配线程执行所需内存
+	/* 根据并行线程数，分配线程执行所需内存，
+	线程数量 xtrabackup_parallel 由 --parallel 参数指定 */
 	data_threads = (data_thread_ctxt_t *)
 		ut_malloc_nokey(sizeof(data_thread_ctxt_t) *
                                 xtrabackup_parallel);

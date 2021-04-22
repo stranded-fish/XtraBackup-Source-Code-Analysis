@@ -107,8 +107,10 @@ compress_init(const char *root)
 
 	/* Create and initialize the worker threads */
 
-	// 线程创建完毕后，会进入 while 死循环，直到 compress_write 方法被调用
-	// compress_write 方法将设置 worker threads 运行必要参数，并解锁线程（设置 thd->data_avail = TRUE;）
+	/* 创建多个 compress 线程，线程数量 xtrabackup_compress_threads 
+	由 --compress-threads 参数指定。线程创建完毕后，会进入 while 死循环，
+	直到 compress_write 方法被调用，compress_write 方法将设置 worker threads 
+	运行必要参数，并解锁线程 */
 	threads = create_worker_threads(xtrabackup_compress_threads);
 	if (threads == NULL) {
 		msg("compress: failed to create worker threads.\n");
@@ -121,8 +123,8 @@ compress_init(const char *root)
 				       MYF(MY_FAE));
 
 	compress_ctxt = (ds_compress_ctxt_t *) (ctxt + 1);
-	compress_ctxt->threads = threads;
-	compress_ctxt->nthreads = xtrabackup_compress_threads;
+	compress_ctxt->threads = threads;                      // 线程环境变量
+	compress_ctxt->nthreads = xtrabackup_compress_threads; // 线程数量
 
 	ctxt->ptr = compress_ctxt;
 	ctxt->root = my_strdup(PSI_NOT_INSTRUMENTED, root, MYF(MY_FAE));
@@ -219,32 +221,42 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 	while (len > 0) {
 		uint max_thread;
 
-		/* Send data to worker threads for compression */
+		// 将待压缩数据信息传递给 compress thread 进行压缩
 		for (i = 0; i < nthreads; i++) {
 			size_t chunk_len;
 
+			// 按顺序遍历下一个线程
 			thd = threads + i;
 
-			// 阻塞调用
+			// 尝试获取线程 ctrl 互斥锁（直到该线程压缩完成，并将压缩内容写入管道后才会解锁）
 			pthread_mutex_lock(&thd->ctrl_mutex);
 
+			/* 待压缩数据长度（最大不可超过 COMPRESS_CHUNK_SIZE）
+    		COMPRESS_CHUNK_SIZE 由参数 --compress-chunk-size 设置 */
 			chunk_len = (len > COMPRESS_CHUNK_SIZE) ?
 				COMPRESS_CHUNK_SIZE : len;
-			thd->from = ptr;
-			thd->from_len = chunk_len;
+			thd->from = ptr;             // 待压缩数据起始地址
+			thd->from_len = chunk_len;   // 待压缩数据长度
 
+			// 尝试获取线程 data 互斥锁
 			pthread_mutex_lock(&thd->data_mutex);
 			
 			// 解锁线程，准备执行 qlz_compress 压缩
 			thd->data_avail = TRUE;
 
+			// 发送信号给 xtrabackup_compress_threads 使其脱离阻塞状态
 			pthread_cond_signal(&thd->data_cond);
+
+			// 解锁线程 data 互斥锁
 			pthread_mutex_unlock(&thd->data_mutex);
 
+			// 总压缩字节数减去刚才压缩的长度
 			len -= chunk_len;
 			if (len == 0) {
 				break;
 			}
+			
+			// 待压缩数据起始地址向前移动 chunk_len 长度
 			ptr += chunk_len;
 		}
 
@@ -264,8 +276,9 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 
 			xb_a(threads[i].to_len > 0);
 
-			// 写 DATABLOCK 
-			// DATABLOCK = "NEWBNEWB" + (ui64)(recovery information) + (ui32)(adler32 of compressed block) + (compressed packet)
+			/* 写 DATABLOCK 
+			DATABLOCK = "NEWBNEWB" + (ui64)(recovery information) +
+			(ui32)(adler32 of compressed block) + (compressed packet) */
 			if (ds_write(dest_file, "NEWBNEWB", 8) ||
 			    write_uint64_le(dest_file,
 					    comp_file->bytes_processed)) {
@@ -274,8 +287,11 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 				return 1;
 			}
 
+			// 该压缩文件已处理字节数 += 最近一次压缩的字节数
 			comp_file->bytes_processed += threads[i].from_len;
 
+			/* to: 压缩后的数据起始地址  to_len: 压缩后的数据长度
+			将压缩后的数据,写入下一个管道 (即:buffer 管道) */
 			if (write_uint32_le(dest_file, threads[i].adler) ||
 			    ds_write(dest_file, threads[i].to,
 					   threads[i].to_len)) {
@@ -285,6 +301,8 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 			}
 
 			pthread_mutex_unlock(&threads[i].data_mutex);
+
+			// 完成压缩数据写入，释放该压缩线程的 ctrl_mutex
 			pthread_mutex_unlock(&threads[i].ctrl_mutex);
 		}
 	}
@@ -459,6 +477,8 @@ compress_worker_thread_func(void *arg)
 	pthread_mutex_unlock(&thd->ctrl_mutex);
 
 	while (1) {
+		/* 信号量设置为 FALSE，同时发送 signal 使 data_copy_thread 收到信号停止阻塞，
+        并进行下一步将之前一次循环压缩完成的数据写入到下一管道 */
 		thd->data_avail = FALSE;
 		pthread_cond_signal(&thd->data_cond);
 
@@ -470,6 +490,11 @@ compress_worker_thread_func(void *arg)
 		if (thd->cancelled)
 			break;
 
+		/* 调用 qpress API 对块进行压缩
+			thd->from      待压缩数据起始地址
+			thd->to        压缩数据写入地址
+			thd->from_len  待压缩数据字节数
+			&thd->state    状态 */
 		thd->to_len = qlz_compress(thd->from, thd->to, thd->from_len,
 					   &thd->state);
 
