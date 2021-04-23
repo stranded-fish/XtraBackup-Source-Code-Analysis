@@ -944,17 +944,19 @@ run_data_threads(datadir_iter_t *it, os_thread_func_t func, uint n)
 	count = n;
 
 	for (i = 0; i < n; i++) {
-		data_threads[i].it = it;
-		data_threads[i].n_thread = i + 1;
-		data_threads[i].count = &count;
-		data_threads[i].count_mutex = &count_mutex;
-		os_thread_create(func, data_threads + i, &data_threads[i].id);
+		data_threads[i].it = it;                                       // 设置文件迭代器（多线程共享）
+		data_threads[i].n_thread = i + 1;                              // 设置线程序号
+		data_threads[i].count = &count;                                // 设置线程计数（多线程共享）
+		data_threads[i].count_mutex = &count_mutex;                    // 设置计数互斥量（多线程共享）
+		os_thread_create(func, data_threads + i, &data_threads[i].id); // 创建线程
 	}
 
 	/* Wait for threads to exit */
 	while (1) {
 		os_thread_sleep(100000);
 		mutex_enter(&count_mutex);
+
+		// 当线程计数为 0，即创建的所有线程均完成任务后，退出
 		if (count == 0) {
 			mutex_exit(&count_mutex);
 			break;
@@ -1919,11 +1921,12 @@ decrypt_decompress_file(const char *filepath, uint thread_n)
  		needs_action = true;
  	}
 
-	// 判断是否为以 .qp 结尾的压缩文件，若是则执行解压过程
+	// 判断是否为以 .qp 或者 .qp.xbcrypt 结尾的压缩文件，若是则执行解压过程
  	if (opt_decompress
  	    && (ends_with(filepath, ".qp")
 		|| (ends_with(filepath, ".qp.xbcrypt")
 		    && opt_decrypt))) {
+
 		/* Step 2. 通过 | 重定向符将 cat 命令读取内容以标准输入方式传递给 qpress 程序，进行解压
 		参数说明：
 			-d 解压
