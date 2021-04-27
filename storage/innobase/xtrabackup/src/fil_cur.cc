@@ -35,7 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 #include "read_filt.h"
 #include "xtrabackup.h"
 
-/* Size of read buffer in pages (640 pages = 10M for 16K sized pages) */
+/*  Pages 的读缓冲区大小 (default 640 pages = 10M，在 page 大小为 16 K 的情况下) */
 #define XB_FIL_CUR_PAGES 640
 
 /***********************************************************************
@@ -302,19 +302,26 @@ xb_fil_cur_read(
 				    cursor->encryption_klen,
 				    cursor->encryption_iv);
 
+	// Step 1. 读取下一个 batch
 	cursor->read_filter->get_next_batch(&cursor->read_filter_ctxt,
 					    &offset, &to_read);
 
+	// to_read：读取字节数，若为 0 则表示已读到文件结尾
 	if (to_read == 0LL) {
 		return(XB_FIL_CUR_EOF);
 	}
 
+	/* Step 2. 判断是否大于 buf_size，若大于，则设置为 buf_size
+	buf_size 大小在 xb_fil_cur_open 阶段确定
+	buf_size = XB_FIL_CUR_PAGES * page_size */
 	if (to_read > (ib_uint64_t) cursor->buf_size) {
 		to_read = (ib_uint64_t) cursor->buf_size;
 	}
 
+	// 合法性验证
 	xb_a(to_read > 0 && to_read <= 0xFFFFFFFFLL);
 
+	// Step 3. 判断 to_read 是否是 page_size 的整数倍，如果不是则通过添加 offset 使其为整数倍
 	if (to_read % cursor->page_size != 0 &&
 	    offset + to_read == (ib_uint64_t) cursor->statinfo.st_size) {
 
@@ -334,8 +341,10 @@ xb_fil_cur_read(
 					~(cursor->page_size - 1));
 	}
 
+	// 验证 to_read 是否为 page_size 整数倍
 	xb_a(to_read % cursor->page_size == 0);
 
+	// Step 4. 根据 to_read 确定需要读取的 page 数
 	npages = (ulint) (to_read >> cursor->page_size_shift);
 
 	retry_count = 10;
