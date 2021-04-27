@@ -35,7 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 #include "read_filt.h"
 #include "xtrabackup.h"
 
-/*  Pages 的读缓冲区大小 (default 640 pages = 10M，在 page 大小为 16 K 的情况下) */
+/* Pages 的读缓冲区大小 (default 640 pages = 10M，在 page 大小为 16 K 的情况下) */
 #define XB_FIL_CUR_PAGES 640
 
 /***********************************************************************
