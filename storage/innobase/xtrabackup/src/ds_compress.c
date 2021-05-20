@@ -38,6 +38,7 @@ FILETRAILER =    "ENDSENDS" + (ui64)(recovery information)
 #include "common.h"
 #include "datasink.h"
 
+// 定义单次压缩块大小，该值默认为 65536 字节（64K），可由 --compress-chunk-size 参数设置
 #define COMPRESS_CHUNK_SIZE ((size_t) (xtrabackup_compress_chunk_size))
 #define MY_QLZ_COMPRESS_OVERHEAD 400
 
@@ -107,10 +108,9 @@ compress_init(const char *root)
 
 	/* Create and initialize the worker threads */
 
-	/* 创建多个 compress 线程，线程数量 xtrabackup_compress_threads 
-	由 --compress-threads 参数指定。线程创建完毕后，会进入 while 死循环，
-	直到 compress_write 方法被调用，compress_write 方法将设置 worker threads 
-	运行必要参数，并解锁线程 */
+	/* 线程创建完毕后，会进入 while 循环并 wait 挂起，直到 compress_write
+	方法被调用，compress_write 方法将设置 worker threads 执行任务所需参数，
+	并发送 signal 解锁线程 - pthread_cond_signal(&thd->data_cond); */
 	threads = create_worker_threads(xtrabackup_compress_threads);
 	if (threads == NULL) {
 		msg("compress: failed to create worker threads.\n");
@@ -244,7 +244,7 @@ compress_write(ds_file_t *file, const void *buf, size_t len)
 			// 解锁线程，准备执行 qlz_compress 压缩
 			thd->data_avail = TRUE;
 
-			// 发送信号给 xtrabackup_compress_threads 使其脱离阻塞状态
+			// 发送信号给 xtrabackup_compress_threads 使其脱离 wait 状态
 			pthread_cond_signal(&thd->data_cond);
 
 			// 解锁线程 data 互斥锁
@@ -482,19 +482,22 @@ compress_worker_thread_func(void *arg)
 		thd->data_avail = FALSE;
 		pthread_cond_signal(&thd->data_cond);
 
-		// 等待执行 compress_write 方法，将 thd->data_avail 设置为 TRUE 解锁
+		// 等待 data_copy_thread 线程执行 compress_write 方法，发送 signal 将其唤醒
 		while (!thd->data_avail && !thd->cancelled) {
 			pthread_cond_wait(&thd->data_cond, &thd->data_mutex);
 		}
 
+		// 判断是否要销毁线程
 		if (thd->cancelled)
 			break;
 
-		/* 调用 qpress API 对块进行压缩
-			thd->from      待压缩数据起始地址
-			thd->to        压缩数据写入地址
-			thd->from_len  待压缩数据字节数
-			&thd->state    状态 */
+		/* 调用 qpress API，执行压缩
+
+		参数说明：
+			thd->from      :  待压缩数据起始地址
+			thd->to        :  压缩数据写入地址
+			thd->from_len  :  待压缩数据字节数
+			&thd->state    :  状态 */
 		thd->to_len = qlz_compress(thd->from, thd->to, thd->from_len,
 					   &thd->state);
 

@@ -302,7 +302,7 @@ xb_fil_cur_read(
 				    cursor->encryption_klen,
 				    cursor->encryption_iv);
 
-	// Step 1. 读取下一个 batch
+	// 获取下一个待读 batch 的 偏移量 与 字节数
 	cursor->read_filter->get_next_batch(&cursor->read_filter_ctxt,
 					    &offset, &to_read);
 
@@ -311,17 +311,17 @@ xb_fil_cur_read(
 		return(XB_FIL_CUR_EOF);
 	}
 
-	/* Step 2. 判断是否大于 buf_size，若大于，则设置为 buf_size
+	/* 判断是否大于 buf_size，若大于，则设置为 buf_size
 	buf_size 大小在 xb_fil_cur_open 阶段确定
 	buf_size = XB_FIL_CUR_PAGES * page_size */
 	if (to_read > (ib_uint64_t) cursor->buf_size) {
 		to_read = (ib_uint64_t) cursor->buf_size;
 	}
 
-	// 合法性验证
+	// to_read 合法性验证
 	xb_a(to_read > 0 && to_read <= 0xFFFFFFFFLL);
 
-	// Step 3. 判断 to_read 是否是 page_size 的整数倍，如果不是则通过添加 offset 使其为整数倍
+	// 判断 to_read 是否是 page_size 的整数倍，如果不是则通过位运算将其变为整数倍
 	if (to_read % cursor->page_size != 0 &&
 	    offset + to_read == (ib_uint64_t) cursor->statinfo.st_size) {
 
@@ -337,6 +337,7 @@ xb_fil_cur_read(
 			return(XB_FIL_CUR_EOF);
 		}
 
+		// 去掉 / page_size 产生的余数
 		to_read = (ib_uint64_t) (((ulint) to_read) &
 					~(cursor->page_size - 1));
 	}
@@ -344,7 +345,7 @@ xb_fil_cur_read(
 	// 验证 to_read 是否为 page_size 整数倍
 	xb_a(to_read % cursor->page_size == 0);
 
-	// Step 4. 根据 to_read 确定需要读取的 page 数
+	// 根据 to_read 确定需要读取的 page 数
 	npages = (ulint) (to_read >> cursor->page_size_shift);
 
 	retry_count = 10;
@@ -358,6 +359,14 @@ read_retry:
 	cursor->buf_offset = offset;
 	cursor->buf_page_no = (ulint) (offset >> cursor->page_size_shift);
 
+	/* 从磁盘读取文件
+	
+	参数说明：
+		read_request  :  执行 read 操作
+		cursor->file  :  待读取文件句柄
+		cursor->buf   :  保存文件 buffer
+		offset        :  偏移量（文件读取起点）
+		to_read       :  待读取字节数 */
 	success = os_file_read(read_request, cursor->file, cursor->buf, offset,
 			       to_read);
 	if (!success) {

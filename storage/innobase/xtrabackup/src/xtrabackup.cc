@@ -4718,7 +4718,7 @@ reread_log_header:
 
 	mutex_exit(&log_sys->mutex);
 
-	// 初始化相应的 datasink
+	// 初始化相应的 datasink 并组建管道
 	xtrabackup_init_datasinks();
 
 	if (!select_history()) {
@@ -4759,7 +4759,7 @@ reread_log_header:
 		io_ticket = xtrabackup_throttle;
 		wait_throttle = os_event_create("wait_throttle");
 
-		// 线程 1 
+		// 线程 1 - 创建 io watch 单线程 
 		os_thread_create(io_watching_thread, NULL,
 				 &io_watching_thread_id);
 	}
@@ -4775,7 +4775,7 @@ reread_log_header:
 
 	log_copying_stop = os_event_create("log_copying_stop");
 
-	// 线程 2 启动日志复制 单线程
+	// 线程 2 - 创建 log copy 单线程
 	os_thread_create(log_copying_thread, NULL, &log_copying_thread_id);
 
 	/* Populate fil_system with tablespaces to copy */
@@ -4837,12 +4837,12 @@ reread_log_header:
 
 	// 创建并行数据复制线程
 	for (i = 0; i < (uint) xtrabackup_parallel; i++) {
-		data_threads[i].it = it; 	                // 设置文件迭代器
-		data_threads[i].num = i+1; 	                // 设置线程序号
+		data_threads[i].it = it;                    // 设置文件迭代器
+		data_threads[i].num = i+1;                  // 设置线程序号
 		data_threads[i].count = &count;             // 设置线程数
 		data_threads[i].count_mutex = &count_mutex; // 设置互斥锁
 
-		// 线程 3 数据复制线程
+		// 线程 3 - 创建 data copy 多线程
 		os_thread_create(data_copy_thread_func, data_threads + i,
 				 &data_threads[i].id);
 				 
@@ -4877,8 +4877,8 @@ reread_log_header:
 	}
 	}
 
-	// 数据库加锁
-	// 开始备份非 InnoDB 表 和 文件
+	/* 数据库执行 FTWRL（加锁）
+	开始备份非 InnoDB 表 和 文件 */
 	if (!backup_start()) {
 		exit(EXIT_FAILURE);
 	}
@@ -4943,8 +4943,8 @@ skip_last_cp:
 		exit(EXIT_FAILURE);
 	}
 
-	// 数据库解锁
-	// 释放由 FTWRL 获取的全局读锁和 binlog 锁
+	/* 数据库解锁
+	释放由 FTWRL 获取的 全局读锁 和 binlog 锁 */
 	if (!backup_finish()) {
 		exit(EXIT_FAILURE);
 	}
@@ -8489,15 +8489,11 @@ handle_options(int argc, char **argv, char ***argv_client, char ***argv_server)
 
 /* ================= main =================== */
 
-/*
-	xtrabackup \ innobackupex 命令入口。
-	
-	注：自版本 2.3 起，innobackupex 功能全部合并到了 xtrabackup 中，为了兼容之前版本，
-	最终工具集仍保留了名为 innobackupex 的可执行文件，但该文件实际为指向 xtrabackup 
-	可执行文件的软链接。file innobackupex > innobackupex: symbolic link to `xtrabackup'
-	故 xtrabackup \ innobackupex 命令入口均为该 main 方法。
-*/
-
+/* xtrabackup \ innobackupex 命令入口
+注：自版本 2.3 起，innobackupex 功能全部合并到了 xtrabackup 中，为了兼容之前版本，
+最终工具集仍保留了名为 innobackupex 的可执行文件，但该文件实际为指向 xtrabackup 
+可执行文件的软链接。file innobackupex > innobackupex: symbolic link to `xtrabackup'
+故 xtrabackup \ innobackupex 命令入口均为该 main 方法 */
 int main(int argc, char **argv)
 {
 	/* ================= init =================== */

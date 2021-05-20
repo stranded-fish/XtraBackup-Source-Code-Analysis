@@ -117,6 +117,7 @@ xb_stream_write_open(xb_wstream_t *stream, const char *path,
 int
 xb_stream_write_data(xb_wstream_file_t *file, const void *buf, size_t len)
 {
+	// 若当前 buffer 空间够，则直接写入 buffer
 	if (len < file->chunk_free) {
 		memcpy(file->chunk_ptr, buf, len);
 		file->chunk_ptr += len;
@@ -125,20 +126,21 @@ xb_stream_write_data(xb_wstream_file_t *file, const void *buf, size_t len)
 		return 0;
 	}
 
+	// 若不够，则先将 file 当中的 buffer 清空（写入下一管道）
 	if (xb_stream_flush(file))
 		return 1;
 
+	// 将内容写入清空过后的 buffer
 	return xb_stream_write_chunk(file, buf, len);
 }
 
 int
 xb_stream_write_close(xb_wstream_file_t *file)
 {
-	/* 此处将 buffer 中的数据分两次输出到 SDTOUT （即控制台）
-	 首先由 xb_stream_flush() 方法输出主要内容，
-	 再由 xb_stream_write_eof() 方法输出 eof 文件终止符，
-	 输出到控制台后，再由 > 重定向符将数据导入到指定的 xbstream 文件
-	 最终实现落盘 */
+	/* 此处将 buffer 中的数据分两次输出到 SDTOUT
+	首先由 xb_stream_flush() 方法写主要内容，
+	再由 xb_stream_write_eof() 方法写 eof 文件终止符，
+	写到 STDOUT 后，再由 > 重定向符将数据导入到指定的 xbstream 文件 */
 	if (xb_stream_flush(file) ||
 	    xb_stream_write_eof(file)) {
 		my_free(file);
@@ -223,10 +225,11 @@ xb_stream_write_chunk(xb_wstream_file_t *file, const void *buf, size_t len)
 
 	xb_ad(ptr <= tmpbuf + sizeof(tmpbuf));
 
+	// 写 xbstream header
 	if (file->write(file, file->userdata, tmpbuf, ptr-tmpbuf) == -1)
 		goto err;
 
-
+	// 写 xbstream data
 	if (file->write(file, file->userdata, buf, len) == -1) /* Payload */
 		goto err;
 
@@ -274,6 +277,7 @@ xb_stream_write_eof(xb_wstream_file_t *file)
 
 	xb_ad(ptr <= tmpbuf + sizeof(tmpbuf));
 
+	// 写 xbstream EOF
 	if (file->write(file, file->userdata, tmpbuf,
 			(ulonglong) (ptr - tmpbuf)) == -1)
 		goto err;
