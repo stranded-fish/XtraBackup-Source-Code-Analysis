@@ -80,6 +80,7 @@ innobackupex --decompress --parallel=4 /data/backup_qp
 #### 多线程模型
 
 **1\.** xtrabackup main 方法根据输入参数 `--decompress`，选择进行解压操作，并调用 `decrypt_decompress()` 方法。
+
 **2\.** `decrypt_decompress()` 又调用 `run_data_threads()` 方法创建执行解压任务的线程。创建数量由参数 `--parallel` 设置，默认为 1。
 
 ```cpp

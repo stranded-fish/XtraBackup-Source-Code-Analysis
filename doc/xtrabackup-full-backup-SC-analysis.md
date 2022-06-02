@@ -144,6 +144,7 @@ if (innobackupex_mode) {
 **Step 1\. xtrabackup_compress_threads 创建**
 
 **1\.** `xtrabackup_init_datasinks();` 初始化数据池的过程中调用 `ds_create(xtrabackup_target_dir, DS_TYPE_COMPRESS);` 方法；
+
 **2\.** `ds_create()` 方法根据 `DS_TYPE_COMPRESS` 参数调用 `compress_init()` 方法创建 `xtrabackup_compress_threads` 线程；
 
 ```cpp
@@ -237,13 +238,17 @@ for (i = 0; i < (uint) xtrabackup_parallel; i++) {
 ![XtraBackup 压缩 - 线程协作模型](https://yulan-img-work.oss-cn-beijing.aliyuncs.com/img/YqUdfTLQgpvC81J.png)
 
 **①** `main thread` 根据参数 **`--parallel`** 创建若干 `data copy threads`，并等待。
+
 **②** `data copy threads` 首先获取一个待压缩文件的指针，然后执行 `while` 循环，每次对一部分文件进行压缩（长度为 `len`），然后 `compress_write` 方法会 **尝试获取 `xtrabackup compress threads` 的 `ctrl mutex`**（注意：一旦该 copy thread 获取到了 compress thread 的第一把锁，则会阻塞其他所有 copy thread，后续的 compress 锁（ctrl mutex）只能由该 copy thread 获取），并将该部分文件内容，再次分块（长度不超过由参数 **`--compress-chunk-size`** 设置的 `COMPRESS_CHUNK_SIZE`），并按地址顺序将每一块分配给一个 `xtrabackup compress thread` 进行压缩。（即，同一时刻，所有的 `xtrabackup compress threads` 将只能服务于一个 `data copy thread`）
+
 **③** `xtrabackup compress threads` 收到待压缩内容的起始地址、块大小以及解锁信号后，开始执行压缩任务，完成任务之后设置信号量、发送 `signal` 通知给他分配任务的 `data copy thread`。
+
 **④** `data copy thread` 会通过 `for` 循环按照顺序（之前分配压缩任务时的顺序）等待 `xtrabackup compress threads` 完成任务（即，如果压缩线程 2、3... 已完成压缩任务，但压缩线程 1 未完成，则只能等待压缩线程 1 完成后，才能继续下一步，因为要保证按照原始文件顺序写入压缩内容），收到完成信号之后，将该线程压缩后的内容写入到下一管道（buffer）中，**并释放该线程的 ctrl mutex**。待整个 `for` 循环完成后（即，表示当前 `data copy thread` 分配给 `xtrabackup compress threads` 的任务已经全部完成并按序写入下一管道），则由下一个获取到 `ctrl mutex` 的 `data copy thread` 重复步骤 **② - ④**。
 
 **源码实现：**
 
 **1\.** 首先根据用户 `--parallel` 参数，创建指定数量的 `data_copy_thread` 线程，并注册回调函数 `data_copy_thread_func`，然后主进程进入 wait 状态，等待所有的 `data_copy_thread` 线程执行完毕。
+
 **2\.** `data_copy_thread_func` 方法通过迭代器，遍历数据，并获取文件指针（即，处理单位为一个文件），直到迭代器返回 `NULL`，表示该线程的任务完成，退出循环，并尝试修改 `count` 计数，当 `count == 0` 时，表示所有线程均完成任务，主线程退出 wait 状态。
 
 ```cpp
@@ -347,6 +352,7 @@ while ((res = xb_fil_cur_read(&cursor)) == XB_FIL_CUR_SUCCESS) {
 ```
 
 **3.3** `compress_write` 方法会先获取执行压缩任务的 `xtrabackup_compress_threads` 线程，并尝试获取其 `ctrl_mutex` 锁。
+
 **3.4** 获取到 `ctrl_mutex` 锁之后，会设置 `xtrabackup_compress_threads` 线程压缩的数据起始地址，总长度信息，**然后解锁该线程，由 `xtrabackup_compress_threads` 执行实际压缩任务**，待 `xtrabackup_compress_threads` 线程执行完毕后，修改文件剩余总字节数 `len`、以及下一次压缩的起始地址 `ptr`。
 
 ```cpp
@@ -399,7 +405,9 @@ for (i = 0; i < nthreads; i++) {
 ### 数据落盘机制
 
 **1\.** `data_copy_thread` 线程调用 `compress_write` 方法并等待压缩完成。
+
 **2\.** `xtrabackup_compress_threads` 线程完成压缩后，修改 `thd->data_avail` 值为 `FALSE`，通知 `data_copy_thread` 继续进行下一步工作。
+
 **3\.** `data_copy_thread` 调用 `buffer_write` 方法将压缩数据写入到 buffer 中。
 
 ```cpp
@@ -438,4 +446,5 @@ for (i = 0; i <= max_thread; i++) {
 ```
 
 **4\.** 最后到 `xb_stream_write_data` 方法将转化为 xbstream 格式的数据写入到 buffer 中，若 buffer 已满（chunk buffer 大小由 `XB_STREAM_MIN_CHUNK_SIZE` 宏定义，默认为 10 MB）则执行 `xb_stream_flush` 方法将数据提前刷新到 STDOUT，最后调用 `xb_stream_write_chunk` 对数据进行处理并刷新到 STDOUT。
+
 **5\.** 最后由重定向符 `>` 将输出到 STDOUT 中的数据写入到磁盘中，完成数据落盘。
