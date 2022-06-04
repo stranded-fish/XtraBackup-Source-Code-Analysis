@@ -5,3 +5,5 @@
 * [Percona XtraBackup 全量备份过程源码解析](/doc/xtrabackup-full-backup-SC-analysis.md)
 * [Percona XtraBackup 全量恢复过程源码解析](/doc/xtrabackup-restore-backup-SC-analysis.md)
 * [Percona XtraBackup 安装与使用](/doc/xtrabackup-installation-and-usage.md)
+
+> 推荐前往：<https://yulan.work/tags/percona-xtrabackup/> 获取更佳阅读体验。
